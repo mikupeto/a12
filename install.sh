@@ -1,208 +1,157 @@
 #!/bin/bash
 
-export LANG=en_US.UTF-8
-
-RED="\033[31m"
-GREEN="\033[32m"
-YELLOW="\033[33m"
-PLAIN="\033[0m"
-
-red() {
-    echo -e "\033[31m\033[01m$1\033[0m"
-}
-
-green() {
-    echo -e "\033[32m\033[01m$1\033[0m"
-}
-
-yellow() {
-    echo -e "\033[33m\033[01m$1\033[0m"
-}
-
-REGEX=("debian" "ubuntu" "centos|red hat|kernel|oracle linux|alma|rocky" "'amazon linux'" "fedora", "alpine")
-RELEASE=("Debian" "Ubuntu" "CentOS" "CentOS" "Fedora" "Alpine")
-PACKAGE_UPDATE=("apt-get update" "apt-get update" "yum -y update" "yum -y update" "yum -y update" "apk update -f")
-PACKAGE_INSTALL=("apt -y install" "apt -y install" "yum -y install" "yum -y install" "yum -y install" "apk add -f")
-PACKAGE_REMOVE=("apt -y remove" "apt -y remove" "yum -y remove" "yum -y remove" "yum -y remove" "apk del -f")
-PACKAGE_UNINSTALL=("apt -y autoremove" "apt -y autoremove" "yum -y autoremove" "yum -y autoremove" "yum -y autoremove" "apk del -f")
-
-[[ $EUID -ne 0 ]] && red "请在root用户下运行脚本" && exit 1
-
-CMD=("$(grep -i pretty_name /etc/os-release 2>/dev/null | cut -d \" -f2)" "$(hostnamectl 2>/dev/null | grep -i system | cut -d : -f2)" "$(lsb_release -sd 2>/dev/null)" "$(grep -i description /etc/lsb-release 2>/dev/null | cut -d \" -f2)" "$(grep . /etc/redhat-release 2>/dev/null)" "$(grep . /etc/issue 2>/dev/null | cut -d \\ -f1 | sed '/^[ ]*$/d')")
-
-for i in "${CMD[@]}"; do
-    SYS="$i" && [[ -n $SYS ]] && break
-done
-
-for ((int = 0; int < ${#REGEX[@]}; int++)); do
-    [[ $(echo "$SYS" | tr '[:upper:]' '[:lower:]') =~ ${REGEX[int]} ]] && SYSTEM="${RELEASE[int]}" && [[ -n $SYSTEM ]] && break
-done
-
-[[ -z $SYSTEM ]] && red "不支持当前VPS系统，请使用主流的操作系统" && exit 1
+red='\033[0;31m'
+green='\033[0;32m'
+yellow='\033[0;33m'
+plain='\033[0m'
 
 cur_dir=$(pwd)
-os_version=$(grep -i version_id /etc/os-release | cut -d \" -f2 | cut -d . -f1)
 
-[[ $SYSTEM == "CentOS" && ${os_version} -lt 7 ]] && echo -e "请使用 CentOS 7 或更高版本的系统！" && exit 1
-[[ $SYSTEM == "Fedora" && ${os_version} -lt 29 ]] && echo -e "请使用 Fedora 29 或更高版本的系统！" && exit 1
-[[ $SYSTEM == "Ubuntu" && ${os_version} -lt 16 ]] && echo -e "请使用 Ubuntu 16 或更高版本的系统！" && exit 1
-[[ $SYSTEM == "Debian" && ${os_version} -lt 9 ]] && echo -e "请使用 Debian 9 或更高版本的系统！" && exit 1
+# check root
+[[ $EUID -ne 0 ]] && echo -e "${red}错误：${plain} 必须使用root用户运行此脚本！\n" && exit 1
 
-archAffix(){
-    case "$(uname -m)" in
-        x86_64 | x64 | amd64 ) echo 'amd64' ;;
-        armv8 | arm64 | aarch64 ) echo 'arm64' ;;
-        s390x ) echo 's390x' ;;
-        * ) red "不支持的CPU架构! " && rm -f install.sh && exit 1 ;;
-    esac
-}
+# check os
+if [[ -f /etc/redhat-release ]]; then
+    release="centos"
+elif cat /etc/issue | grep -Eqi "debian"; then
+    release="debian"
+elif cat /etc/issue | grep -Eqi "ubuntu"; then
+    release="ubuntu"
+elif cat /etc/issue | grep -Eqi "centos|red hat|redhat"; then
+    release="centos"
+elif cat /proc/version | grep -Eqi "debian"; then
+    release="debian"
+elif cat /proc/version | grep -Eqi "ubuntu"; then
+    release="ubuntu"
+elif cat /proc/version | grep -Eqi "centos|red hat|redhat"; then
+    release="centos"
+else
+    echo -e "${red}未检测到系统版本，请联系脚本作者！${plain}\n" && exit 1
+fi
 
-info_bar(){
-    clear
-    echo "#############################################################"
-    echo -e "#                         ${RED}x-ui 面板${PLAIN}                         #"
-    echo -e "# ${GREEN}作者${PLAIN}: taffychan                                           #"
-    echo -e "# ${GREEN}GitHub${PLAIN}: https://github.com/taffychan                      #"
-    echo "#############################################################"
-    echo ""
-    echo -e "操作系统: ${GREEN} ${CMD} ${PLAIN}"
-    echo ""
-    sleep 2
-}
+arch=$(arch)
 
-checkv4v6(){
-    v6=$(curl -s6m8 api64.ipify.org -k)
-    v4=$(curl -s4m8 api64.ipify.org -k)
-}
+if [[ $arch == "x86_64" || $arch == "x64" || $arch == "amd64" ]]; then
+    arch="amd64"
+elif [[ $arch == "aarch64" || $arch == "arm64" ]]; then
+    arch="arm64"
+elif [[ $arch == "s390x" ]]; then
+    arch="s390x"
+else
+    arch="amd64"
+    echo -e "${red}检测架构失败，使用默认架构: ${arch}${plain}"
+fi
 
-check_status(){
-    yellow "正在检查VPS的IP配置环境, 请稍等..." && sleep 1
-    WgcfIPv4Status=$(curl -s4m8 https://www.cloudflare.com/cdn-cgi/trace -k | grep warp | cut -d= -f2)
-    WgcfIPv6Status=$(curl -s6m8 https://www.cloudflare.com/cdn-cgi/trace -k | grep warp | cut -d= -f2)
-    if [[ $WgcfIPv4Status =~ "on"|"plus" ]] || [[ $WgcfIPv6Status =~ "on"|"plus" ]]; then
-        wg-quick down wgcf >/dev/null 2>&1
-        checkv4v6
-        wg-quick up wgcf >/dev/null 2>&1
+echo "架构: ${arch}"
+
+if [ $(getconf WORD_BIT) != '32' ] && [ $(getconf LONG_BIT) != '64' ]; then
+    echo "本软件不支持 32 位系统(x86)，请使用 64 位系统(x86_64)，如果检测有误，请联系作者"
+    exit -1
+fi
+
+os_version=""
+
+# os version
+if [[ -f /etc/os-release ]]; then
+    os_version=$(awk -F'[= ."]' '/VERSION_ID/{print $3}' /etc/os-release)
+fi
+if [[ -z "$os_version" && -f /etc/lsb-release ]]; then
+    os_version=$(awk -F'[= ."]+' '/DISTRIB_RELEASE/{print $2}' /etc/lsb-release)
+fi
+
+if [[ x"${release}" == x"centos" ]]; then
+    if [[ ${os_version} -le 6 ]]; then
+        echo -e "${red}请使用 CentOS 7 或更高版本的系统！${plain}\n" && exit 1
+    fi
+elif [[ x"${release}" == x"ubuntu" ]]; then
+    if [[ ${os_version} -lt 16 ]]; then
+        echo -e "${red}请使用 Ubuntu 16 或更高版本的系统！${plain}\n" && exit 1
+    fi
+elif [[ x"${release}" == x"debian" ]]; then
+    if [[ ${os_version} -lt 8 ]]; then
+        echo -e "${red}请使用 Debian 8 或更高版本的系统！${plain}\n" && exit 1
+    fi
+fi
+
+install_base() {
+    if [[ x"${release}" == x"centos" ]]; then
+        yum install wget curl tar -y
     else
-        checkv4v6
-        if [[ -z $v4 && -n $v6 ]]; then
-            yellow "检测到为纯IPv6 VPS, 已自动添加DNS64解析服务器"
-            echo -e "nameserver 2a01:4f8:c2c:123f::1" > /etc/resolv.conf
-        fi
+        apt install wget curl tar -y
     fi
-    sleep 1
 }
 
-install_base(){
-    if [[ ! $SYSTEM == "CentOS" ]]; then
-        ${PACKAGE_UPDATE[int]}
+#This function will be called when user installed x-ui out of sercurity
+config_after_install() {
+    echo -e "${yellow}出于安全考虑，安装/更新完成后需要强制修改端口与账户密码${plain}"
+    read -p "确认是否继续?[y/n]": config_confirm
+    if [[ x"${config_confirm}" == x"y" || x"${config_confirm}" == x"Y" ]]; then
+        read -p "请设置您的账户名:" config_account
+        echo -e "${yellow}您的账户名将设定为:${config_account}${plain}"
+        read -p "请设置您的账户密码:" config_password
+        echo -e "${yellow}您的账户密码将设定为:${config_password}${plain}"
+        read -p "请设置面板访问端口:" config_port
+        echo -e "${yellow}您的面板访问端口将设定为:${config_port}${plain}"
+        echo -e "${yellow}确认设定,设定中${plain}"
+        /usr/local/x-ui/x-ui setting -username ${config_account} -password ${config_password}
+        echo -e "${yellow}账户密码设定完成${plain}"
+        /usr/local/x-ui/x-ui setting -port ${config_port}
+        echo -e "${yellow}面板端口设定完成${plain}"
+    else
+        echo -e "${red}已取消,所有设置项均为默认设置,请及时修改${plain}"
     fi
-    if [[ -z $(type -P curl) ]]; then
-        ${PACKAGE_INSTALL[int]} curl
-    fi
-    if [[ -z $(type -P tar) ]]; then
-        ${PACKAGE_INSTALL[int]} tar
-    fi   
-    check_status
 }
 
-download_xui(){
-    if [[ -e /usr/local/x-ui/ ]]; then
-        rm -rf /usr/local/x-ui/
-    fi
-    
+install_x-ui() {
+    systemctl stop x-ui
+    cd /usr/local/
+
     if [ $# == 0 ]; then
-        last_version=$(curl -Ls "https://api.github.com/repos/mikupeto/a12/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') || last_version=$(curl -sm8 https://raw.githubusercontent.com/mikupeto/a12/main/config/version >/dev/null 2>&1)
-        if [[ -z "$last_version" ]]; then
-            red "检测 x-ui 版本失败，请确保你的服务器能够连接 Github API"
-            rm -f install.sh
+        last_version=$(curl -Ls "https://api.github.com/repos/mikupeto/a12/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        if [[ ! -n "$last_version" ]]; then
+            echo -e "${red}检测 x-ui 版本失败，可能是超出 Github API 限制，请稍后再试，或手动指定 x-ui 版本安装${plain}"
             exit 1
         fi
-        yellow "检测到 x-ui 最新版本：${last_version}，开始安装"
-        wget -N --no-check-certificate -O /usr/local/x-ui-linux-$(archAffix).tar.gz https://github.com/mikupeto/a12/releases/download/${last_version}/x-ui-linux-$(archAffix).tar.gz
+        echo -e "检测到 x-ui 最新版本：${last_version}，开始安装"
+        wget -N --no-check-certificate -O /usr/local/x-ui-linux-${arch}.tar.gz https://github.com/mikupeto/a12/releases/download/${last_version}/x-ui-linux-${arch}.tar.gz
         if [[ $? -ne 0 ]]; then
-            red "下载 x-ui 失败，请确保你的服务器能够连接并下载 Github 的文件"
-            rm -f install.sh
+            echo -e "${red}下载 x-ui 失败，请确保你的服务器能够下载 Github 的文件${plain}"
             exit 1
         fi
     else
         last_version=$1
-        url="https://github.com/mikupeto/a12/releases/download/${last_version}/x-ui-linux-$(archAffix).tar.gz"
-        yellow "开始安装 x-ui $1"
-        wget -N --no-check-certificate -O /usr/local/x-ui-linux-$(archAffix).tar.gz ${url}
+        url="https://github.com/mikupeto/a12/releases/download/${last_version}/x-ui-linux-${arch}.tar.gz"
+        echo -e "开始安装 x-ui v$1"
+        wget -N --no-check-certificate -O /usr/local/x-ui-linux-${arch}.tar.gz ${url}
         if [[ $? -ne 0 ]]; then
-            red "下载 x-ui v$1 失败，请确保此版本存在"
-            rm -f install.sh
+            echo -e "${red}下载 x-ui v$1 失败，请确保此版本存在${plain}"
             exit 1
         fi
     fi
-    
-    cd /usr/local/
-    tar zxvf x-ui-linux-$(archAffix).tar.gz
-    rm -f x-ui-linux-$(archAffix).tar.gz
-    
+
+    if [[ -e /usr/local/x-ui/ ]]; then
+        rm /usr/local/x-ui/ -rf
+    fi
+
+    tar zxvf x-ui-linux-${arch}.tar.gz
+    rm x-ui-linux-${arch}.tar.gz -f
     cd x-ui
-    chmod +x x-ui bin/xray-linux-$(archAffix)
+    chmod +x x-ui bin/xray-linux-${arch}
     cp -f x-ui.service /etc/systemd/system/
-    
-    wget -N --no-check-certificate https://raw.githubusercontent.com/mikupeto/a12/main/x-ui.sh -O /usr/bin/x-ui
+    wget --no-check-certificate -O /usr/bin/x-ui https://raw.githubusercontent.com/mikupeto/a12/main/x-ui.sh
     chmod +x /usr/local/x-ui/x-ui.sh
     chmod +x /usr/bin/x-ui
-}
-
-panel_config() {
-    yellow "出于安全性考虑，安装/更新完成后需要强制修改端口与账户密码"
-    read -rp "请设置登录用户名 [默认随机用户名]: " config_account
-    [[ -z $config_account ]] && config_account=$(date +%s%N | md5sum | cut -c 1-8)
-    read -rp "请设置登录密码 [默认随机密码]: " config_password
-    [[ -z $config_password ]] && config_password=$(date +%s%N | md5sum | cut -c 1-8)
-    read -rp "请设置面板访问端口 [默认随机端口]: " config_port
-    [[ -z $config_port ]] && config_port=$(shuf -i 1000-65535 -n 1)
-    until [[ -z $(ss -ntlp | awk '{print $4}' | grep -w "$config_port") ]]; do
-        if [[ -n $(ss -ntlp | awk '{print $4}' | grep -w  "$config_port") ]]; then
-            yellow "你设置的端口目前已被其他程序占用，请重新设置端口"
-            read -rp "请设置面板访问端口 [默认随机端口]: " config_port
-            [[ -z $config_port ]] && config_port=$(shuf -i 1000-65535 -n 1)
-        fi
-    done
-    /usr/local/x-ui/x-ui setting -username ${config_account} -password ${config_password} >/dev/null 2>&1
-    /usr/local/x-ui/x-ui setting -port ${config_port} >/dev/null 2>&1
-}
-
-install_xui() {
-    info_bar
-    
-    if [[ -e /usr/local/x-ui/ ]]; then
-        yellow "检测到目前已安装x-ui面板, 确认卸载原x-ui面板?"
-        read -rp "请输入选项 [Y/N, 默认N]: " yn
-        if [[ $yn =~ "Y"|"y" ]]; then
-            systemctl stop x-ui
-            systemctl disable x-ui
-            rm /etc/systemd/system/x-ui.service -f
-            systemctl daemon-reload
-            systemctl reset-failed
-            rm /etc/x-ui/ -rf
-            rm /usr/local/x-ui/ -rf
-            rm /usr/bin/x-ui -f
-        else
-            red "已取消卸载, 脚本退出!"
-            exit 1
-        fi
-    fi
-    
-    systemctl stop x-ui >/dev/null 2>&1
-    
-    install_base
-    download_xui $1
-    panel_config
-    
+    config_after_install
+    #echo -e "如果是全新安装，默认网页端口为 ${green}54321${plain}，用户名和密码默认都是 ${green}admin${plain}"
+    #echo -e "请自行确保此端口没有被其他程序占用，${yellow}并且确保 54321 端口已放行${plain}"
+    #    echo -e "若想将 54321 修改为其它端口，输入 x-ui 命令进行修改，同样也要确保你修改的端口也是放行的"
+    #echo -e ""
+    #echo -e "如果是更新面板，则按你之前的方式访问面板"
+    #echo -e ""
     systemctl daemon-reload
-    systemctl enable x-ui >/dev/null 2>&1
+    systemctl enable x-ui
     systemctl start x-ui
-    
-    cd $cur_dir
-    rm -f install.sh
-    green "x-ui v${last_version} 安装完成，面板已启动"
+    echo -e "${green}x-ui v${last_version}${plain} 安装完成，面板已启动，"
     echo -e ""
     echo -e "x-ui 管理脚本使用方法: "
     echo -e "----------------------------------------------"
@@ -219,24 +168,8 @@ install_xui() {
     echo -e "x-ui install      - 安装 x-ui 面板"
     echo -e "x-ui uninstall    - 卸载 x-ui 面板"
     echo -e "----------------------------------------------"
-    echo -e ""
-    show_login_info
-    echo -e ""
 }
 
-show_login_info(){
-    yellow "可复制粘贴下面提供的登录地址至浏览器以登录面板"
-    if [[ -n $v4 && -z $v6 ]]; then
-        echo -e "面板IPv4登录地址为: ${GREEN}http://${v4}:${config_port} ${PLAIN}"
-    elif [[ -n $v6 && -z $v4 ]]; then
-        echo -e "面板IPv6登录地址为: ${GREEN}http://[${v6}]:${config_port} ${PLAIN}"
-    elif [[ -n $v4 && -n $v6 ]]; then
-        echo -e "面板IPv4登录地址为: ${GREEN}http://${v4}:${config_port} ${PLAIN}"
-        echo -e "面板IPv6登录地址为: ${GREEN}http://[${v6}]:${config_port} ${PLAIN}"
-    fi
-    echo -e "用户名: ${GREEN}$config_account ${PLAIN}"
-    echo -e "密码: ${GREEN}$config_password ${PLAIN}"
-    echo -e "请确认端口 ${RED} ${config_port} ${PLAIN} 已在系统及VPS提供商的防火墙放行"
-}
-
-install_xui $1
+echo -e "${green}开始安装${plain}"
+install_base
+install_x-ui $1

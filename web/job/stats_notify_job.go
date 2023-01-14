@@ -91,6 +91,14 @@ func (j *StatsNotifyJob) SSHStatusLoginNotify(xuiStartTime string) {
 			fmt.Println("getLoginTime error: ", error.Error())
 			return
 		}
+		/*
+			//TODO:time compare if x-ui get restart and there exist logging users
+			XUIRunTime, error := exec.Command("bash", "-c", " systemctl status x-ui | grep Active| tail -n 1 | awk '{print $6,$7}' ").Output()
+			if error != nil {
+				fmt.Println("getXUIRunTime error:", error.Error())
+				return
+			}
+		*/
 		var SSHLoginTimeStr string
 		SSHLoginTimeStr = common.ByteToString(SSHLoginTime)
 		t1, err := time.Parse("2006-01-02 15:04:05", SSHLoginTimeStr)
@@ -105,18 +113,18 @@ func (j *StatsNotifyJob) SSHStatusLoginNotify(xuiStartTime string) {
 			return
 		}
 
-		SSHLoginIpAddr, error := exec.Command("bash", "-c", "who | tail -n 1 | awk -F [\\(\\)] 'NR==1 {print $2}'").Output()
+		SSHLoginIpAddr, error := exec.Command("bash", "-c", "who | awk -F [\\(\\)] 'NR==1 {print $2}'").Output()
 		if error != nil {
 			fmt.Println("getSSHLoginIpAddr error: ", error)
 			return
 		}
 
-		SSHLoginInfo = fmt.Sprintf("SSH用户登录提醒:\r\n")
-		SSHLoginInfo += fmt.Sprintf("主机名称: %s\r\n", name)
-		SSHLoginInfo += fmt.Sprintf("登录用户: %s", SSHLoginUserName)
-		SSHLoginInfo += fmt.Sprintf("登录时间: %s", SSHLoginTime)
-		SSHLoginInfo += fmt.Sprintf("登录IP: %s", SSHLoginIpAddr)
-		SSHLoginInfo += fmt.Sprintf("当前登录用户数: %s", getSSHUserNumber)
+		SSHLoginInfo = fmt.Sprintf("新用户登录提醒:\r\n")
+		SSHLoginInfo += fmt.Sprintf("主机名称:%s\r\n", name)
+		SSHLoginInfo += fmt.Sprintf("SSH登录用户:%s", SSHLoginUserName)
+		SSHLoginInfo += fmt.Sprintf("SSH登录时间:%s", SSHLoginTime)
+		SSHLoginInfo += fmt.Sprintf("SSH登录IP:%s", SSHLoginIpAddr)
+		SSHLoginInfo += fmt.Sprintf("当前SSH登录用户数:%s", getSSHUserNumber)
 		j.telegramService.SendMsgToTgbot(SSHLoginInfo)
 	} else {
 		SSHLoginUser = numberInt

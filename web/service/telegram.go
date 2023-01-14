@@ -15,10 +15,10 @@ import (
 	"github.com/shirou/gopsutil/load"
 )
 
-// This should be global variable, and only one instance
+//This should be global variable,and only one instance
 var botInstace *tgbotapi.BotAPI
 
-// 结构体类型大写表示可以被其他包访问
+//结构体类型大写表示可以被其他包访问
 type TelegramService struct {
 	xrayService    XrayService
 	serverService  ServerService
@@ -28,51 +28,44 @@ type TelegramService struct {
 
 func (s *TelegramService) GetsystemStatus() string {
 	var status string
-	// get hostname
+	//get hostname
 	name, err := os.Hostname()
 	if err != nil {
-		fmt.Println("get hostname error: ", err)
+		fmt.Println("get hostname error:", err)
 		return ""
 	}
-
-	status = fmt.Sprintf("主机名称: %s\r\n", name)
-	status += fmt.Sprintf("系统类型: %s\r\n", runtime.GOOS)
-	status += fmt.Sprintf("CPU架构: %s\r\n", runtime.GOARCH)
-
+	status = fmt.Sprintf("主机名称:%s\r\n", name)
+	status += fmt.Sprintf("系统类型:%s\r\n", runtime.GOOS)
+	status += fmt.Sprintf("系统架构:%s\r\n", runtime.GOARCH)
 	avgState, err := load.Avg()
 	if err != nil {
-		logger.Warning("get load avg failed: ", err)
+		logger.Warning("get load avg failed:", err)
 	} else {
-		status += fmt.Sprintf("系统负载: %.2f, %.2f, %.2f\r\n", avgState.Load1, avgState.Load5, avgState.Load15)
+		status += fmt.Sprintf("系统负载:%.2f,%.2f,%.2f\r\n", avgState.Load1, avgState.Load5, avgState.Load15)
 	}
-
 	upTime, err := host.Uptime()
 	if err != nil {
-		logger.Warning("get uptime failed: ", err)
+		logger.Warning("get uptime failed:", err)
 	} else {
-		status += fmt.Sprintf("运行时间: %s\r\n", common.FormatTime(upTime))
+		status += fmt.Sprintf("运行时间:%s\r\n", common.FormatTime(upTime))
 	}
-
-	// xray version
-	status += fmt.Sprintf("目前xray内核版本: %s\r\n", s.xrayService.GetXrayVersion())
-
-	// ip address
+	//xray version
+	status += fmt.Sprintf("xray版本:%s\r\n", s.xrayService.GetXrayVersion())
+	//ip address
 	var ip string
 	ip = common.GetMyIpAddr()
-	status += fmt.Sprintf("IP地址: %s\r\n \r\n", ip)
-
-	// get traffic
+	status += fmt.Sprintf("IP地址:%s\r\n \r\n", ip)
+	//get traffic
 	inbouds, err := s.inboundService.GetAllInbounds()
 	if err != nil {
-		logger.Warning("StatsNotifyJob run error: ", err)
+		logger.Warning("StatsNotifyJob run error:", err)
 	}
-
 	for _, inbound := range inbouds {
-		status += fmt.Sprintf("节点名称: %s\r\n端口: %d\r\n上行流量↑: %s\r\n下行流量↓: %s\r\n总流量: %s\r\n", inbound.Remark, inbound.Port, common.FormatTraffic(inbound.Up), common.FormatTraffic(inbound.Down), common.FormatTraffic((inbound.Up + inbound.Down)))
+		status += fmt.Sprintf("节点名称:%s\r\n端口:%d\r\n上行流量↑:%s\r\n下行流量↓:%s\r\n总流量:%s\r\n", inbound.Remark, inbound.Port, common.FormatTraffic(inbound.Up), common.FormatTraffic(inbound.Down), common.FormatTraffic((inbound.Up + inbound.Down)))
 		if inbound.ExpiryTime == 0 {
-			status += fmt.Sprintf("到期时间: 无限期\r\n \r\n")
+			status += fmt.Sprintf("到期时间:无限期\r\n \r\n")
 		} else {
-			status += fmt.Sprintf("到期时间: %s\r\n \r\n", time.Unix((inbound.ExpiryTime/1000), 0).Format("2006-01-02 15:04:05"))
+			status += fmt.Sprintf("到期时间:%s\r\n \r\n", time.Unix((inbound.ExpiryTime/1000), 0).Format("2006-01-02 15:04:05"))
 		}
 	}
 	return status
@@ -82,33 +75,27 @@ func (s *TelegramService) StartRun() {
 	logger.Info("telegram service ready to run")
 	s.settingService = SettingService{}
 	tgBottoken, err := s.settingService.GetTgBotToken()
-
 	if err != nil || tgBottoken == "" {
-		logger.Infof("Telegram service start run failed, GetTgBotToken fail, err: %v, tgBottoken: %s", err, tgBottoken)
+		logger.Infof("telegram service start run failed,GetTgBotToken fail,err:%v,tgBottoken:%s", err, tgBottoken)
 		return
 	}
 	logger.Infof("TelegramService GetTgBotToken:%s", tgBottoken)
-
 	botInstace, err = tgbotapi.NewBotAPI(tgBottoken)
-
 	if err != nil {
-		logger.Infof("Telegram service start run failed, NewBotAPI fail: %v, tgBottoken: %s", err, tgBottoken)
+		logger.Infof("telegram service start run failed,NewBotAPI fail:%v,tgBottoken:%s", err, tgBottoken)
 		return
 	}
 	botInstace.Debug = false
 	fmt.Printf("Authorized on account %s", botInstace.Self.UserName)
-
-	// get all my commands
+	//get all my commands
 	commands, err := botInstace.GetMyCommands()
 	if err != nil {
-		logger.Warning("Telegram service start run error, GetMyCommandsfail: ", err)
+		logger.Warning("telegram service start run error,GetMyCommandsfail:", err)
 	}
-
 	for _, command := range commands {
-		fmt.Printf("Command %s, Description: %s \r\n", command.Command, command.Description)
+		fmt.Printf("command %s,Description:%s \r\n", command.Command, command.Description)
 	}
-
-	// get update
+	//get update
 	chanMessage := tgbotapi.NewUpdate(0)
 	chanMessage.Timeout = 60
 
@@ -116,7 +103,7 @@ func (s *TelegramService) StartRun() {
 
 	for update := range updates {
 		if update.Message == nil {
-			// NOTE:may ther are different bot instance,we could use different bot endApiPoint
+			//NOTE:may ther are different bot instance,we could use different bot endApiPoint
 			updates.Clear()
 			continue
 		}
@@ -132,113 +119,98 @@ func (s *TelegramService) StartRun() {
 		case "delete":
 			inboundPortStr := update.Message.CommandArguments()
 			inboundPortValue, err := strconv.Atoi(inboundPortStr)
-
 			if err != nil {
-				msg.Text = "无效的入站端口，请检查"
+				msg.Text = "Invalid inbound port,please check it"
 				break
 			}
-
 			//logger.Infof("Will delete port:%d inbound", inboundPortValue)
 			error := s.inboundService.DelInboundByPort(inboundPortValue)
 			if error != nil {
-				msg.Text = fmt.Sprintf("删除端口为 %d 的节点失败", inboundPortValue)
+				msg.Text = fmt.Sprintf("delete inbound whoes port is %d failed", inboundPortValue)
 			} else {
-				msg.Text = fmt.Sprintf("已成功删除端口为 %d 的节点", inboundPortValue)
+				msg.Text = fmt.Sprintf("delete inbound whoes port is %d success", inboundPortValue)
 			}
-
 		case "restart":
 			err := s.xrayService.RestartXray(true)
 			if err != nil {
-				msg.Text = fmt.Sprintln("重启xray服务失败, err: ", err)
+				msg.Text = fmt.Sprintln("Restart xray failed,error:", err)
 			} else {
-				msg.Text = "已成功重启xray服务"
+				msg.Text = "Restart xray success"
 			}
-
 		case "disable":
 			inboundPortStr := update.Message.CommandArguments()
 			inboundPortValue, err := strconv.Atoi(inboundPortStr)
 			if err != nil {
-				msg.Text = "无效的入站端口，请检查"
+				msg.Text = "Invalid inbound port,please check it"
 				break
 			}
 			//logger.Infof("Will delete port:%d inbound", inboundPortValue)
 			error := s.inboundService.DisableInboundByPort(inboundPortValue)
 			if error != nil {
-				msg.Text = fmt.Sprintf("禁用端口为 %d 的节点失败, err: %s", inboundPortValue, error)
+				msg.Text = fmt.Sprintf("disable inbound whoes port is %d failed,err:%s", inboundPortValue, error)
 			} else {
-				msg.Text = fmt.Sprintf("已成功禁用端口为 %d 的节点", inboundPortValue)
+				msg.Text = fmt.Sprintf("disable inbound whoes port is %d success", inboundPortValue)
 			}
-
 		case "enable":
 			inboundPortStr := update.Message.CommandArguments()
 			inboundPortValue, err := strconv.Atoi(inboundPortStr)
 			if err != nil {
-				msg.Text = "无效的入站端口，请检查"
+				msg.Text = "Invalid inbound port,please check it"
 				break
 			}
 			//logger.Infof("Will delete port:%d inbound", inboundPortValue)
 			error := s.inboundService.EnableInboundByPort(inboundPortValue)
 			if error != nil {
-				msg.Text = fmt.Sprintf("尝试启用端口为 %d 的节点失败, err: %s", inboundPortValue, error)
+				msg.Text = fmt.Sprintf("enable inbound whoes port is %d failed,err:%s", inboundPortValue, error)
 			} else {
-				msg.Text = fmt.Sprintf("已成功启用端口为 %d 的节点", inboundPortValue)
+				msg.Text = fmt.Sprintf("enable inbound whoes port is %d success", inboundPortValue)
 			}
-
 		case "clear":
 			inboundPortStr := update.Message.CommandArguments()
 			inboundPortValue, err := strconv.Atoi(inboundPortStr)
 			if err != nil {
-				msg.Text = "无效的入站端口，请检查"
+				msg.Text = "Invalid inbound port,please check it"
 				break
 			}
 			error := s.inboundService.ClearTrafficByPort(inboundPortValue)
 			if error != nil {
-				msg.Text = fmt.Sprintf("清除端口为 %d 的节点流量失败, err: %s", inboundPortValue, error)
+				msg.Text = fmt.Sprintf("Clear Traffic whose port is %d failed,err:%s", inboundPortValue, error)
 			} else {
-				msg.Text = fmt.Sprintf("已成功清除端口为 %d 的节点流量", inboundPortValue)
+				msg.Text = fmt.Sprintf("Clear Traffic whose port is %d success", inboundPortValue)
 			}
 
 		case "clearall":
 			error := s.inboundService.ClearAllInboundTraffic()
 			if error != nil {
-				msg.Text = fmt.Sprintf("清理所有节点流量失败, err: %s", error)
+				msg.Text = fmt.Sprintf("Clear All inbound Traffic failed,err:%s", error)
 			} else {
-				msg.Text = fmt.Sprintf("已成功清理所有节点流量")
+				msg.Text = fmt.Sprintf("Clear All inbound Traffic success")
 			}
-
 		case "version":
 			versionStr := update.Message.CommandArguments()
 			currentVersion, _ := s.serverService.GetXrayVersions()
 			if currentVersion[0] == versionStr {
-				msg.Text = fmt.Sprint("不能更新成和本地x-ui的xray内核一样的版本")
+				msg.Text = fmt.Sprintf("can't change same version to %s", versionStr)
 			}
 			error := s.serverService.UpdateXray(versionStr)
 			if error != nil {
-				msg.Text = fmt.Sprintf("xray内核版本升级为 %s 失败, err: %s", versionStr, error)
+				msg.Text = fmt.Sprintf("change version to %s failed,err:%s", versionStr, error)
 			} else {
-				msg.Text = fmt.Sprintf("xray内核版本升级为 %s 成功", versionStr)
+				msg.Text = fmt.Sprintf("change version to %s  success", versionStr)
 			}
-
 		case "status":
 			msg.Text = s.GetsystemStatus()
-
-		case "start":
-			msg.Text = "欢迎使用x-ui面板机器人, 请输入 /help 查看帮助信息"
-
 		default:
-			// NOTE:here we need string as a new line each one,we should use ``
-			msg.Text = `x-ui面版 Telegram Bot 使用说明
-			
-/help 获取bot的帮助信息 (此菜单)
-/delete [PORT] 删除对应端口的节点
-/restart 重启xray服务
-/status 获取当前系统状态
-/enable [PORT] 开启对应端口的节点
-/disable [PORT] 关闭对应端口的节点
-/clear [PORT] 清理对应端口的节点流量
-/clearall 清理所有节点流量
-/version [VERSION] 升级xray内核到 [VERSION] 版本
-`
+			//NOTE:here we need string as a new line each one,we should use ``
+			msg.Text = `/delete will help you delete inbound according port
+/restart will restart xray,this command will not restart x-ui
+/status will get current system info
+/enable will enable inbound according port
+/disable will disable inbound according port
+/clear will clear inbound traffic accoring port
+/clearall will cleal all inbouns traffic
+/version will change xray version to specific one
+You can input /help to see more commands`
 		}
 
 		if _, err := botInstace.Send(msg); err != nil {
@@ -252,11 +224,11 @@ func (s *TelegramService) SendMsgToTgbot(msg string) {
 	logger.Info("SendMsgToTgbot entered")
 	tgBotid, err := s.settingService.GetTgBotChatId()
 	if err != nil {
-		logger.Warning("sendMsgToTgbot failed, GetTgBotChatId fail:", err)
+		logger.Warning("sendMsgToTgbot failed,GetTgBotChatId fail:", err)
 		return
 	}
 	if tgBotid == 0 {
-		logger.Warning("sendMsgToTgbot failed, GetTgBotChatId illegal")
+		logger.Warning("sendMsgToTgbot failed,GetTgBotChatId illegal")
 		return
 	}
 
@@ -268,7 +240,7 @@ func (s *TelegramService) SendMsgToTgbot(msg string) {
 	}
 }
 
-// NOTE:This function can't be called repeatly
+//NOTE:This function can't be called repeatly
 func (s *TelegramService) StopRunAndClose() {
 	if botInstace != nil {
 		botInstace.StopReceivingUpdates()

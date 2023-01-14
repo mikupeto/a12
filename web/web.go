@@ -308,6 +308,7 @@ func (s *Server) startTask() {
 	s.cron.AddFunc("@every 2s", func() { job.NewStatsNotifyJob().SSHStatusLoginNotify(xuiBeginRunTime) })
 	// 每一天提示一次流量情况,上海时间8点30
 	var entry cron.EntryID
+
 	if isTelegramEnable {
 		runtime, err := s.settingService.GetTgbotRuntime()
 		if err != nil || runtime == "" {
@@ -326,6 +327,7 @@ func (s *Server) startTask() {
 }
 
 func (s *Server) Start() (err error) {
+	//这是一个匿名函数，没没有函数名
 	defer func() {
 		if err != nil {
 			s.Stop()
