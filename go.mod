@@ -14,8 +14,8 @@ require (
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/xtls/xray-core v1.6.4
 	go.uber.org/atomic v1.10.0
-	golang.org/x/text v0.4.0
-	google.golang.org/grpc v1.51.0
+	golang.org/x/text v0.5.0
+	google.golang.org/grpc v1.52.0
 	gorm.io/driver/sqlite v1.4.3
 	gorm.io/gorm v1.24.2
 )
@@ -46,8 +46,8 @@ require (
 	github.com/ugorji/go/codec v1.2.7 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	golang.org/x/crypto v0.3.0 // indirect
-	golang.org/x/net v0.2.0 // indirect
-	golang.org/x/sys v0.2.0 // indirect
+	golang.org/x/net v0.4.0 // indirect
+	golang.org/x/sys v0.3.0 // indirect
 	google.golang.org/genproto v0.0.0-20221118155620-16455021b5e6 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
